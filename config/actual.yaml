@@ -1,0 +1,7 @@
+app:
+  port: 8000
+  debug: false
+  environment: production
+
+security:
+  https_required: true

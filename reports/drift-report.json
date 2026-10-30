@@ -1,0 +1,14 @@
+{
+  "tool": "DriftGuard",
+  "generated_at": "2026-10-30T15:39:29.369Z",
+  "expected_config": "config/expected.yaml",
+  "actual_config": "config/actual.yaml",
+  "status": "PASSED",
+  "summary": {
+    "total": 0,
+    "critical": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "findings": []
+}
