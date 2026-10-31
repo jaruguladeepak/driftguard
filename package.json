@@ -5,12 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "tsx src/server/index.ts",
+    "server:dev": "tsx watch src/server/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:server": "vitest run tests/api.test.ts tests/db.test.ts",
     "cli": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/cors": "^11.3.1",
+    "@fastify/rate-limit": "^11.2.1",
+    "fastify": "^5.12.7",
     "js-yaml": "^4.1.0",
     "lucide-react": "^1.16.0",
     "react": "^19.0.0",
