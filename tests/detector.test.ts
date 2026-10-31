@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detectDrift, parseConfig, ValueError } from "../src/core/detector";
+import { detectFormat } from "../src/core/parser";
 import { evaluateFindings, shouldBlock } from "../src/core/policies";
 
 describe("detectDrift", () => {
@@ -91,3 +92,88 @@ describe("detectDrift", () => {
   });
 });
 
+describe("Multi-format Parser (YAML, JSON, TOML)", () => {
+  it("parses valid JSON configuration", () => {
+    const jsonStr = '{"app": {"port": 8080, "name": "service"}}';
+    const parsed = parseConfig(jsonStr, "config.json");
+    expect(parsed.app.port).toBe(8080);
+    expect(parsed.app.name).toBe("service");
+  });
+
+  it("parses valid TOML configuration", () => {
+    const tomlStr = `
+[app]
+port = 9090
+name = "service-toml"
+
+[security]
+https_required = true
+`;
+    const parsed = parseConfig(tomlStr, "config.toml");
+    expect(parsed.app.port).toBe(9090);
+    expect(parsed.security.https_required).toBe(true);
+  });
+
+  it("auto-detects format from extension and content", () => {
+    expect(detectFormat("{}", "app.json")).toBe("json");
+    expect(detectFormat("[server]\nport = 80", "app.toml")).toBe("toml");
+    expect(detectFormat("server:\n  port: 80", "app.yaml")).toBe("yaml");
+  });
+});
+
+describe("CIS Benchmark Security Policies", () => {
+  it("blocks insecure TLS versions (CIS-TLS-1)", () => {
+    const diffs = detectDrift(
+      { security: { tls_version: "1.3" } },
+      { security: { tls_version: "1.0" } }
+    );
+    const findings = evaluateFindings(diffs);
+    expect(findings[0].severity).toBe("CRITICAL");
+    expect(findings[0].ruleId).toBe("CIS-TLS-1");
+    expect(shouldBlock(findings)).toBe(true);
+  });
+
+  it("blocks root user execution (CIS-IAM-1)", () => {
+    const diffs = detectDrift(
+      { process: { user: "appuser" } },
+      { process: { user: "root" } }
+    );
+    const findings = evaluateFindings(diffs);
+    expect(findings[0].severity).toBe("CRITICAL");
+    expect(findings[0].ruleId).toBe("CIS-IAM-1");
+    expect(shouldBlock(findings)).toBe(true);
+  });
+
+  it("blocks plaintext secret exposure in config (CIS-SEC-1)", () => {
+    const diffs = detectDrift(
+      { auth: { api_key: null } },
+      { auth: { api_key: "sk_live_1234567890abcdef" } }
+    );
+    const findings = evaluateFindings(diffs);
+    expect(findings[0].severity).toBe("CRITICAL");
+    expect(findings[0].ruleId).toBe("CIS-SEC-1");
+    expect(shouldBlock(findings)).toBe(true);
+  });
+
+  it("blocks exposure of sensitive management ports (CIS-NET-2)", () => {
+    const diffs = detectDrift(
+      { server: { port: 8080 } },
+      { server: { port: 22 } }
+    );
+    const findings = evaluateFindings(diffs);
+    expect(findings[0].severity).toBe("CRITICAL");
+    expect(findings[0].ruleId).toBe("CIS-NET-2");
+    expect(shouldBlock(findings)).toBe(true);
+  });
+
+  it("blocks wildcard CORS in production (CIS-CORS-1)", () => {
+    const diffs = detectDrift(
+      { security: { cors_origin: "https://example.com" } },
+      { security: { cors_origin: "*" } }
+    );
+    const findings = evaluateFindings(diffs);
+    expect(findings[0].severity).toBe("CRITICAL");
+    expect(findings[0].ruleId).toBe("CIS-CORS-1");
+    expect(shouldBlock(findings)).toBe(true);
+  });
+});

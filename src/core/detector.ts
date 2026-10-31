@@ -1,25 +1,8 @@
-import yaml from "js-yaml";
 import { DriftDifference } from "./types";
+import { parseConfig, ConfigParseError } from "./parser";
 
-/**
- * Parse a YAML string into a plain JavaScript object mapping.
- */
-export function parseConfig(yamlContent: string, sourceName = "Configuration"): Record<string, any> {
-  const data = yaml.load(yamlContent);
-
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new ValueError(`${sourceName} must contain a YAML mapping.`);
-  }
-
-  return data as Record<string, any>;
-}
-
-export class ValueError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ValueError";
-  }
-}
+export { parseConfig, ConfigParseError };
+export const ValueError = ConfigParseError;
 
 /**
  * Detect added, removed, and changed configuration values between expected and actual maps.
@@ -74,4 +57,3 @@ export function detectDrift(
   compare(expected, actual);
   return differences;
 }
-
