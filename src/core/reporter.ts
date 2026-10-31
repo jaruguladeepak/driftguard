@@ -1,18 +1,44 @@
 import { DriftFinding, DriftReport, DriftSummary } from "./types";
 
 /**
- * Generate a structured DriftGuard report object.
+ * Mask sensitive values such as tokens, passwords, and API keys to prevent secret leakage in reports.
+ */
+export function maskSensitiveValue(setting: string, value: any, ruleId?: string): any {
+  if (value === null || value === undefined) return value;
+  const lower = setting.toLowerCase();
+  const isSecret =
+    ruleId === "CIS-SEC-1" ||
+    lower.includes("secret") ||
+    lower.includes("api_key") ||
+    lower.includes("private_key") ||
+    lower.includes("password") ||
+    lower.includes("token");
+
+  if (isSecret && typeof value === "string" && !value.startsWith("${")) {
+    return "[REDACTED_SECRET]";
+  }
+  return value;
+}
+
+/**
+ * Generate a structured DriftGuard report object with automatic secret redaction.
  */
 export function generateReport(
   expectedPath: string,
   actualPath: string,
   findings: DriftFinding[]
 ): DriftReport {
+  const sanitizedFindings: DriftFinding[] = findings.map((f) => ({
+    ...f,
+    expected: maskSensitiveValue(f.setting, f.expected, f.ruleId),
+    actual: maskSensitiveValue(f.setting, f.actual, f.ruleId),
+  }));
+
   const summary: DriftSummary = {
-    total: findings.length,
-    critical: findings.filter((f) => f.severity === "CRITICAL").length,
-    medium: findings.filter((f) => f.severity === "MEDIUM").length,
-    low: findings.filter((f) => f.severity === "LOW").length,
+    total: sanitizedFindings.length,
+    critical: sanitizedFindings.filter((f) => f.severity === "CRITICAL").length,
+    medium: sanitizedFindings.filter((f) => f.severity === "MEDIUM").length,
+    low: sanitizedFindings.filter((f) => f.severity === "LOW").length,
   };
 
   return {
@@ -22,7 +48,7 @@ export function generateReport(
     actual_config: actualPath,
     status: summary.critical > 0 ? "BLOCKED" : "PASSED",
     summary,
-    findings,
+    findings: sanitizedFindings,
   };
 }
 

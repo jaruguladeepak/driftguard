@@ -42,9 +42,9 @@ flowchart LR
 
 ---
 
-## 🛡️ CIS Benchmark & Security Policy Matrix
+## 🛡️ CIS-Inspired Security Policies & Secret Redaction
 
-DriftGuard enforces industry-standard CIS (Center for Internet Security) hardening guidelines:
+DriftGuard enforces security hardening policies inspired by CIS (Center for Internet Security) baseline principles for configuration safety:
 
 | Rule ID | Policy Description | Condition | Severity | Gate Action |
 |---|---|---|---|---|
@@ -58,6 +58,8 @@ DriftGuard enforces industry-standard CIS (Center for Internet Security) hardeni
 | **DRIFT-NET-PORT** | Service Port Change | Any change to `app.port` | **MEDIUM** | ⚠️ Warning (Exit code 0) |
 | **DRIFT-RES-LIMIT** | Resource Limits Removed | Memory or CPU limit removed | **MEDIUM** | ⚠️ Warning (Exit code 0) |
 | **DRIFT-GEN-DIFF** | General Configuration Drift | Other added, removed, or changed settings | **LOW** | ℹ️ Notice (Exit code 0) |
+
+> 🔒 **Automatic Secret Redaction:** Any sensitive credential flagged by `CIS-SEC-1` or key pattern matching is automatically redacted as `[REDACTED_SECRET]` across JSON, Markdown, and terminal reports, preventing credentials from leaking into CI artifacts or PR comments. *(Note: These heuristics are project-defined baseline hardening rules inspired by CIS benchmarks, not certified compliance audits).*
 
 ---
 
