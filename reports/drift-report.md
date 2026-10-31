@@ -1,17 +1,29 @@
 # DriftGuard Configuration Drift Report
 
-**Status:** PASSED
-**Generated:** 2026-10-30T15:39:29.369Z
+**Status:** BLOCKED
+**Generated:** 2026-10-31T05:42:27.949Z
 **Expected configuration:** `config/expected.yaml`
-**Actual configuration:** `config/actual.yaml`
+**Actual configuration:** `config/demo-actual.yaml`
 
 ## Summary
 
-- Total differences: 0
-- Critical: 0
-- Medium: 0
+- Total differences: 2
+- Critical: 1
+- Medium: 1
 - Low: 0
 
 ## Findings
 
-No configuration drift detected.
+### app.debug
+
+- **Change:** changed
+- **Expected:** `false`
+- **Actual:** `true`
+- **Severity:** CRITICAL
+
+### app.port
+
+- **Change:** changed
+- **Expected:** `8000`
+- **Actual:** `9000`
+- **Severity:** MEDIUM

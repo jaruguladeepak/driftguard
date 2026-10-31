@@ -1,14 +1,29 @@
 {
   "tool": "DriftGuard",
-  "generated_at": "2026-10-30T15:39:29.369Z",
+  "generated_at": "2026-10-31T05:42:27.949Z",
   "expected_config": "config/expected.yaml",
-  "actual_config": "config/actual.yaml",
-  "status": "PASSED",
+  "actual_config": "config/demo-actual.yaml",
+  "status": "BLOCKED",
   "summary": {
-    "total": 0,
-    "critical": 0,
-    "medium": 0,
+    "total": 2,
+    "critical": 1,
+    "medium": 1,
     "low": 0
   },
-  "findings": []
+  "findings": [
+    {
+      "setting": "app.debug",
+      "expected": false,
+      "actual": true,
+      "change": "changed",
+      "severity": "CRITICAL"
+    },
+    {
+      "setting": "app.port",
+      "expected": 8000,
+      "actual": 9000,
+      "change": "changed",
+      "severity": "MEDIUM"
+    }
+  ]
 }

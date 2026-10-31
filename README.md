@@ -42,14 +42,60 @@ flowchart LR
 
 ---
 
-## ⚖️ Policy Classification Matrix
+## 🚦 DevOps Policy Enforcement
 
-| Setting | Condition | Severity | Deployment Action |
-|---|---|---|---|
-| `app.debug` | Value equals `true` | **CRITICAL** | 🚨 **BLOCK** (Exit code 1) |
-| `security.https_required` | Removed or `false` | **CRITICAL** | 🚨 **BLOCK** (Exit code 1) |
-| `app.port` | Any port change | **MEDIUM** | ⚠️ Warning (Exit code 0) |
-| Other settings | Added / Removed / Changed | **LOW** | ℹ️ Notice (Exit code 0) |
+DriftGuard acts as an automated configuration policy gate in GitHub Actions.
+
+```mermaid
+flowchart TD
+    PR[Pull Request / Manual Dispatch] --> Eval[1. Evaluate Configuration Policy]
+    Eval --> Gate{Critical Drift or Baseline Mod?}
+    Gate -->|CRITICAL / Mod: Fail Exit 1| Block[🚨 DriftGuard Policy Gate: BLOCKED]
+    Gate -->|Zero / Non-Critical: Exit 0| Pass[✅ DriftGuard Policy Gate: PASSED]
+    Block --> PostFail[Publish Failure Comment on PR]
+    Pass --> PostPass[Publish Success Comment on PR]
+    Pass --> Staging[Simulate Staging Deployment]
+    Staging --> Prod[Simulate Production Deployment]
+    Block -.->|Halted| Staging
+```
+
+### Pull Request Checks
+
+When a pull request modifies configuration or policy-related files, the workflow:
+1. Runs the automated test suite (`npm test`).
+2. Compares the proposed configuration against the trusted baseline.
+3. Classifies configuration differences by severity (`CRITICAL`, `MEDIUM`, `LOW`).
+4. Generates a Markdown drift report.
+5. Attempts to publish or update the report as a pull request comment.
+6. Fails the required policy check when critical drift is detected.
+
+> **Baseline Protection:** Changes to `config/expected.yaml` are blocked for separate review because the trusted baseline is loaded directly from the pull request's target branch (`origin/main`).
+
+### Policy Severity Rules
+
+| Severity | Example | Policy Behavior |
+|---|---|---|
+| **CRITICAL** | `app.debug: true` | 🚨 **BLOCK** (Status check fails, prevents merge) |
+| **CRITICAL** | `security.https_required: false` | 🚨 **BLOCK** (Status check fails, prevents merge) |
+| **MEDIUM** | `app.port` changes | ⚠️ **ALLOW** by default (Review notice) |
+| **LOW** | Other additions / modifications | ℹ️ **ALLOW** by default |
+
+### Manual Policy Testing (Workflow Dispatch)
+
+You can simulate both passing and failing scenarios on-demand:
+1. Open the repository's **Actions** tab on GitHub.
+2. Select **DriftGuard PR Policy Gate**.
+3. Click **Run workflow**.
+4. Choose `config/actual.yaml` for the clean baseline demonstration (All gates pass, staging & production simulations run).
+5. Choose `config/demo-actual.yaml` to simulate critical drift (DriftGuard Policy Gate fails, blocking staging and production stages).
+
+### Enforcing Pull Request Merges
+
+A failed workflow alone does not prevent merging unless repository rules require that check. To enforce blocking:
+1. Go to repository **Settings** → **Branches** (or **Rulesets**).
+2. Add a rule for `main`.
+3. Check **Require status checks to pass before merging**.
+4. Select **DriftGuard Policy Gate**.
 
 ---
 
@@ -103,25 +149,26 @@ npm run build
 
 ```text
 driftguard/
-├── .github/workflows/       # GitHub Actions CI/CD pipeline
-│   └── driftguard.yml
-├── config/                  # Configuration files
-│   ├── expected.yaml        # Production baseline
-│   ├── actual.yaml          # Clean target configuration
-│   └── demo-actual.yaml     # Deliberately drifted target
+├── .github/workflows/
+│   ├── driftguard.yml               # Main CI & GitHub Pages deployment
+│   └── driftguard-pr-gate.yml       # PR Policy Gate & Release Stage Simulation
+├── config/                          # Configuration files
+│   ├── expected.yaml                # Production baseline
+│   ├── actual.yaml                  # Clean target configuration
+│   └── demo-actual.yaml             # Deliberately drifted target
 ├── src/
-│   ├── core/                # Core TypeScript engine (shared across CLI & Browser)
-│   │   ├── types.ts         # Type interfaces
-│   │   ├── detector.ts      # Recursive diff algorithm
-│   │   ├── policies.ts      # Risk evaluation & blocker rules
-│   │   └── reporter.ts      # Terminal, JSON, and Markdown formatters
-│   ├── App.tsx              # Interactive React dashboard
-│   ├── index.css            # Dashboard styling
-│   └── cli.ts               # Node.js CLI script
-├── tests/                   # Vitest unit test suite
+│   ├── core/                        # Core TypeScript engine (shared across CLI & Browser)
+│   │   ├── types.ts                 # Type interfaces
+│   │   ├── detector.ts              # Recursive diff algorithm
+│   │   ├── policies.ts              # Risk evaluation & blocker rules
+│   │   └── reporter.ts              # Terminal, JSON, and Markdown formatters
+│   ├── App.tsx                      # Interactive React dashboard
+│   ├── index.css                    # Dashboard styling
+│   └── cli.ts                       # Node.js CLI script
+├── tests/                           # Vitest unit test suite
 │   ├── detector.test.ts
 │   └── reporter.test.ts
-├── legacy-python/           # Original Python 3.12 prototype
+├── legacy-python/                   # Original Python 3.12 prototype
 ├── package.json
 └── vite.config.ts
 ```
