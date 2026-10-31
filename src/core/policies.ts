@@ -8,6 +8,41 @@ interface PolicyRule {
   reason: string;
 }
 
+function isPlainObject(val: any): boolean {
+  return val !== null && typeof val === "object" && !Array.isArray(val);
+}
+
+function matchesSecretPattern(name: string): boolean {
+  const leaf = name.split(".").pop() || name;
+  const cleanLeaf = leaf.replace(/\[\d+\]$/, "");
+  return /(?:secret|api[-_]?key|private[-_]?key|pass(?:word|wd)?|db[-_]?pass|token|credential)/i.test(
+    cleanLeaf
+  );
+}
+
+function containsSecret(val: any, keyName = ""): boolean {
+  if (val === null || val === undefined) return false;
+
+  if (isPlainObject(val)) {
+    return Object.entries(val).some(([k, v]) => containsSecret(v, k));
+  }
+
+  if (Array.isArray(val)) {
+    return val.some((item) => containsSecret(item, keyName));
+  }
+
+  if (matchesSecretPattern(keyName)) {
+    if (typeof val === "string") {
+      return val.length > 0 && !val.startsWith("${");
+    }
+    if (typeof val === "number" || typeof val === "boolean") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 const CIS_SECURITY_RULES: PolicyRule[] = [
   // CIS-APP-1: Production Debug Mode Disabled
   {
@@ -36,9 +71,21 @@ const CIS_SECURITY_RULES: PolicyRule[] = [
     severity: "CRITICAL",
     reason: "TLS 1.0 and 1.1 are vulnerable to cryptographic downgrade attacks (e.g. POODLE, BEAST).",
     matches: (d) => {
-      if (d.setting === "security.tls_version" && d.actual) {
-        const ver = String(d.actual).trim();
-        return ver === "1.0" || ver === "1.1" || parseFloat(ver) < 1.2;
+      if (
+        d.setting === "security.tls_version" &&
+        d.actual !== null &&
+        d.actual !== undefined &&
+        d.actual !== ""
+      ) {
+        const cleaned = String(d.actual)
+          .trim()
+          .replace(/^tls[_\s-]*v?/i, "")
+          .replace(/^v/i, "");
+        const parsed = parseFloat(cleaned);
+        if (!isNaN(parsed)) {
+          return parsed < 1.2;
+        }
+        return cleaned === "1.0" || cleaned === "1.1";
       }
       return false;
     },
@@ -62,19 +109,8 @@ const CIS_SECURITY_RULES: PolicyRule[] = [
     severity: "CRITICAL",
     reason: "Sensitive credentials or tokens should not be stored in static configuration files.",
     matches: (d) => {
-      const lower = d.setting.toLowerCase();
-      const isSecretKey =
-        lower.includes("secret") ||
-        lower.includes("api_key") ||
-        lower.includes("private_key") ||
-        lower.includes("password");
-      return (
-        isSecretKey &&
-        d.actual !== null &&
-        typeof d.actual === "string" &&
-        d.actual.length > 0 &&
-        !d.actual.startsWith("${") // Exclude env var interpolations
-      );
+      if (d.actual === null || d.actual === undefined) return false;
+      return containsSecret(d.actual, d.setting);
     },
   },
 
@@ -86,10 +122,14 @@ const CIS_SECURITY_RULES: PolicyRule[] = [
     reason: "Ports 22 (SSH), 23 (Telnet), and 3389 (RDP) must not be directly exposed in application configurations.",
     matches: (d) => {
       const sensitivePorts = [22, 23, 3389];
-      return (
-        (d.setting.endsWith("port") || d.setting.includes("ports")) &&
-        sensitivePorts.includes(Number(d.actual))
-      );
+      const isPortSetting = /(^|[._])ports?([._]|$)/i.test(d.setting);
+      if (!isPortSetting || d.actual === null || d.actual === undefined) return false;
+
+      if (Array.isArray(d.actual)) {
+        return d.actual.some((p) => sensitivePorts.includes(Number(p)));
+      }
+      const num = Number(d.actual);
+      return !isNaN(num) && sensitivePorts.includes(num);
     },
   },
 

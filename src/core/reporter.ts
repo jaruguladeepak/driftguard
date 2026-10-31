@@ -1,23 +1,62 @@
 import { DriftFinding, DriftReport, DriftSummary } from "./types";
 
 /**
+ * Determine if a setting name or leaf property matches sensitive secret patterns.
+ */
+export function isSensitiveKey(setting: string, ruleId?: string): boolean {
+  if (ruleId === "CIS-SEC-1") return true;
+  const leaf = setting.split(".").pop() || setting;
+  const cleanLeaf = leaf.replace(/\[\d+\]$/, "");
+  return /(?:secret|api[-_]?key|private[-_]?key|pass(?:word|wd)?|db[-_]?pass|token|credential)/i.test(
+    cleanLeaf
+  );
+}
+
+/**
  * Mask sensitive values such as tokens, passwords, and API keys to prevent secret leakage in reports.
+ * Recursively redacts nested objects, arrays, and credential fields.
  */
 export function maskSensitiveValue(setting: string, value: any, ruleId?: string): any {
   if (value === null || value === undefined) return value;
-  const lower = setting.toLowerCase();
-  const isSecret =
-    ruleId === "CIS-SEC-1" ||
-    lower.includes("secret") ||
-    lower.includes("api_key") ||
-    lower.includes("private_key") ||
-    lower.includes("password") ||
-    lower.includes("token");
 
-  if (isSecret && typeof value === "string" && !value.startsWith("${")) {
-    return "[REDACTED_SECRET]";
+  // Recursively sanitize arrays
+  if (Array.isArray(value)) {
+    return value.map((item, idx) =>
+      maskSensitiveValue(`${setting}[${idx}]`, item, ruleId)
+    );
   }
+
+  // Recursively sanitize objects
+  if (typeof value === "object") {
+    const sanitized: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      sanitized[key] = maskSensitiveValue(`${setting}.${key}`, val, ruleId);
+    }
+    return sanitized;
+  }
+
+  const isSecret = isSensitiveKey(setting, ruleId);
+
+  if (isSecret) {
+    if (typeof value === "string") {
+      if (value.startsWith("${")) return value; // Preserve environment variable placeholders
+      return "[REDACTED_SECRET]";
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return "[REDACTED_SECRET]";
+    }
+  }
+
   return value;
+}
+
+/**
+ * Format a value cleanly for text display without showing [object Object].
+ */
+function formatDisplayValue(val: any): string {
+  if (val === null || val === undefined) return String(val);
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
 }
 
 /**
@@ -83,8 +122,8 @@ export function formatTerminalReport(report: DriftReport): string {
       lines.push(
         `Setting:  ${finding.setting}`,
         `Change:   ${finding.change}`,
-        `Expected: ${finding.expected}`,
-        `Actual:   ${finding.actual}`,
+        `Expected: ${formatDisplayValue(finding.expected)}`,
+        `Actual:   ${formatDisplayValue(finding.actual)}`,
         `Severity: ${finding.severity}`
       );
       if (finding.ruleId && finding.reason) {
@@ -129,8 +168,8 @@ export function generateMarkdownReport(report: DriftReport): string {
         `### ${finding.setting}`,
         "",
         `- **Change:** ${finding.change}`,
-        `- **Expected:** \`${finding.expected}\``,
-        `- **Actual:** \`${finding.actual}\``,
+        `- **Expected:** \`${formatDisplayValue(finding.expected)}\``,
+        `- **Actual:** \`${formatDisplayValue(finding.actual)}\``,
         `- **Severity:** ${finding.severity}`
       );
       if (finding.ruleId && finding.reason) {
