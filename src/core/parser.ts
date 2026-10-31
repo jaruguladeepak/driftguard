@@ -11,6 +11,20 @@ export class ConfigParseError extends Error {
 }
 
 /**
+ * Sanitize error messages to prevent sensitive secrets or credentials leaked in parser snippets.
+ */
+export function sanitizeErrorMessage(msg: string): string {
+  if (!msg) return msg;
+  return msg.replace(
+    /((?:api[-_]?key|secret|token|password|pass|credential)[a-z0-9_]*\s*[:=]\s*)(['"]?)([^'"\r\n\s]+)\2/gi,
+    (match, prefix, quote, val) => {
+      if (val.startsWith("${")) return match;
+      return `${prefix}${quote}[REDACTED_SECRET]${quote}`;
+    }
+  );
+}
+
+/**
  * Detect the configuration format from file path or raw string content.
  */
 export function detectFormat(content: string, filePath?: string): ConfigFormat {
@@ -66,8 +80,9 @@ export function parseConfig(
     if (error instanceof ConfigParseError) {
       throw error;
     }
+    const sanitizedMsg = sanitizeErrorMessage(error.message || String(error));
     throw new ConfigParseError(
-      `Failed to parse ${sourceName} as ${format.toUpperCase()}: ${error.message}`,
+      `Failed to parse ${sourceName} as ${format.toUpperCase()}: ${sanitizedMsg}`,
       format
     );
   }

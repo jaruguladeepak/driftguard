@@ -386,12 +386,20 @@ export default function App() {
                     </td>
                     <td>
                       <span className="code-val">
-                        {finding.expected !== null ? String(finding.expected) : "null"}
+                        {finding.expected !== null
+                          ? typeof finding.expected === "object"
+                            ? JSON.stringify(finding.expected)
+                            : String(finding.expected)
+                          : "null"}
                       </span>
                     </td>
                     <td>
                       <span className="code-val">
-                        {finding.actual !== null ? String(finding.actual) : "null"}
+                        {finding.actual !== null
+                          ? typeof finding.actual === "object"
+                            ? JSON.stringify(finding.actual)
+                            : String(finding.actual)
+                          : "null"}
                       </span>
                     </td>
                   </tr>
