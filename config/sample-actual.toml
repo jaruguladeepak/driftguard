@@ -1,0 +1,8 @@
+[app]
+port = 8080
+environment = "production"
+
+[security]
+https_required = true
+tls_version = "1.3"
+cors_origin = "*"

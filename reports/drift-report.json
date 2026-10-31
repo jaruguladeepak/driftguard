@@ -1,29 +1,24 @@
 {
   "tool": "DriftGuard",
-  "generated_at": "2026-10-31T05:42:27.949Z",
-  "expected_config": "config/expected.yaml",
-  "actual_config": "config/demo-actual.yaml",
+  "generated_at": "2026-10-31T11:13:47.360Z",
+  "expected_config": "config/sample-expected.toml",
+  "actual_config": "config/sample-actual.toml",
   "status": "BLOCKED",
   "summary": {
-    "total": 2,
+    "total": 1,
     "critical": 1,
-    "medium": 1,
+    "medium": 0,
     "low": 0
   },
   "findings": [
     {
-      "setting": "app.debug",
-      "expected": false,
-      "actual": true,
+      "setting": "security.cors_origin",
+      "expected": "https://app.example.com",
+      "actual": "*",
       "change": "changed",
-      "severity": "CRITICAL"
-    },
-    {
-      "setting": "app.port",
-      "expected": 8000,
-      "actual": 9000,
-      "change": "changed",
-      "severity": "MEDIUM"
+      "severity": "CRITICAL",
+      "ruleId": "CIS-CORS-1",
+      "reason": "Access-Control-Allow-Origin: '*' allows unauthorized cross-origin requests to access user data."
     }
   ]
 }

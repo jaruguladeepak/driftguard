@@ -1,0 +1,10 @@
+{
+  "app": {
+    "port": 9000,
+    "debug": true
+  },
+  "security": {
+    "https_required": true,
+    "tls_version": "1.0"
+  }
+}

@@ -11,6 +11,8 @@ export interface DriftDifference {
 
 export interface DriftFinding extends DriftDifference {
   severity: Severity;
+  ruleId?: string;
+  reason?: string;
 }
 
 export interface DriftSummary {
@@ -31,4 +33,3 @@ export interface DriftReport {
   summary: DriftSummary;
   findings: DriftFinding[];
 }
-

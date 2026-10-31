@@ -59,9 +59,12 @@ export function formatTerminalReport(report: DriftReport): string {
         `Change:   ${finding.change}`,
         `Expected: ${finding.expected}`,
         `Actual:   ${finding.actual}`,
-        `Severity: ${finding.severity}`,
-        "-".repeat(55)
+        `Severity: ${finding.severity}`
       );
+      if (finding.ruleId && finding.reason) {
+        lines.push(`Policy:   [${finding.ruleId}] ${finding.reason}`);
+      }
+      lines.push("-".repeat(55));
     }
   }
 
@@ -102,12 +105,14 @@ export function generateMarkdownReport(report: DriftReport): string {
         `- **Change:** ${finding.change}`,
         `- **Expected:** \`${finding.expected}\``,
         `- **Actual:** \`${finding.actual}\``,
-        `- **Severity:** ${finding.severity}`,
-        ""
+        `- **Severity:** ${finding.severity}`
       );
+      if (finding.ruleId && finding.reason) {
+        lines.push(`- **Policy (${finding.ruleId}):** ${finding.reason}`);
+      }
+      lines.push("");
     }
   }
 
   return lines.join("\n");
 }
-

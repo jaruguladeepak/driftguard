@@ -1,29 +1,23 @@
 # DriftGuard Configuration Drift Report
 
 **Status:** BLOCKED
-**Generated:** 2026-10-31T05:42:27.949Z
-**Expected configuration:** `config/expected.yaml`
-**Actual configuration:** `config/demo-actual.yaml`
+**Generated:** 2026-10-31T11:13:47.360Z
+**Expected configuration:** `config/sample-expected.toml`
+**Actual configuration:** `config/sample-actual.toml`
 
 ## Summary
 
-- Total differences: 2
+- Total differences: 1
 - Critical: 1
-- Medium: 1
+- Medium: 0
 - Low: 0
 
 ## Findings
 
-### app.debug
+### security.cors_origin
 
 - **Change:** changed
-- **Expected:** `false`
-- **Actual:** `true`
+- **Expected:** `https://app.example.com`
+- **Actual:** `*`
 - **Severity:** CRITICAL
-
-### app.port
-
-- **Change:** changed
-- **Expected:** `8000`
-- **Actual:** `9000`
-- **Severity:** MEDIUM
+- **Policy (CIS-CORS-1):** Access-Control-Allow-Origin: '*' allows unauthorized cross-origin requests to access user data.

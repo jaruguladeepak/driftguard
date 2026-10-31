@@ -9,73 +9,163 @@ import {
   Columns,
   RefreshCw,
 } from "lucide-react";
-import { parseConfig, detectDrift } from "./core/detector";
+import { detectDrift } from "./core/detector";
+import { parseConfig, detectFormat, ConfigFormat } from "./core/parser";
 import { evaluateFindings, shouldBlock } from "./core/policies";
 import { generateReport, generateMarkdownReport } from "./core/reporter";
 
-const DEFAULT_EXPECTED = `app:
+interface Preset {
+  format: ConfigFormat;
+  expected: string;
+  actual: string;
+}
+
+const PRESETS: Record<string, Preset> = {
+  "YAML: Clean Baseline": {
+    format: "yaml",
+    expected: `app:
   port: 8000
   debug: false
   environment: production
 
 security:
-  https_required: true`;
+  https_required: true
+  tls_version: "1.3"`,
+    actual: `app:
+  port: 8000
+  debug: false
+  environment: production
 
-const PRESETS: Record<string, string> = {
-  "Clean Baseline": `app:
+security:
+  https_required: true
+  tls_version: "1.3"`,
+  },
+
+  "YAML: Critical Drift (Debug Enabled)": {
+    format: "yaml",
+    expected: `app:
   port: 8000
   debug: false
   environment: production
 
 security:
   https_required: true`,
-
-  "Drift Demonstration (Critical)": `app:
+    actual: `app:
   port: 9000
   debug: true
   environment: production
 
 security:
   https_required: true`,
+  },
 
-  "Security Policy Breach (HTTPS Disabled)": `app:
-  port: 8000
-  debug: false
-  environment: production
+  "JSON: Insecure TLS 1.0 Downgrade (CIS-TLS-1)": {
+    format: "json",
+    expected: `{
+  "app": {
+    "port": 8000,
+    "debug": false
+  },
+  "security": {
+    "https_required": true,
+    "tls_version": "1.3"
+  }
+}`,
+    actual: `{
+  "app": {
+    "port": 9000,
+    "debug": false
+  },
+  "security": {
+    "https_required": true,
+    "tls_version": "1.0"
+  }
+}`,
+  },
 
-security:
-  https_required: false`,
+  "TOML: Wildcard CORS Breach (CIS-CORS-1)": {
+    format: "toml",
+    expected: `[app]
+port = 8080
+environment = "production"
+
+[security]
+https_required = true
+cors_origin = "https://app.example.com"`,
+    actual: `[app]
+port = 8080
+environment = "production"
+
+[security]
+https_required = true
+cors_origin = "*"`,
+  },
+
+  "YAML: Container Root Execution (CIS-IAM-1)": {
+    format: "yaml",
+    expected: `process:
+  user: "appuser"
+docker:
+  privileged: false`,
+    actual: `process:
+  user: "root"
+docker:
+  privileged: true`,
+  },
+
+  "YAML: Plaintext Secret Exposure (CIS-SEC-1)": {
+    format: "yaml",
+    expected: `auth:
+  api_key: "\${ENV_STRIPE_KEY}"
+  secret_token: "\${ENV_SECRET}"`,
+    actual: `auth:
+  api_key: "sk_live_94820491823901"
+  secret_token: "super_secret_unencrypted"`,
+  },
 };
 
 export default function App() {
-  const [presetKey, setPresetKey] = useState<string>("Drift Demonstration (Critical)");
-  const [expectedYaml, setExpectedYaml] = useState<string>(DEFAULT_EXPECTED);
-  const [actualYaml, setActualYaml] = useState<string>(PRESETS["Drift Demonstration (Critical)"]);
+  const [presetKey, setPresetKey] = useState<string>("YAML: Critical Drift (Debug Enabled)");
+  const [expectedInput, setExpectedInput] = useState<string>(PRESETS["YAML: Critical Drift (Debug Enabled)"].expected);
+  const [actualInput, setActualInput] = useState<string>(PRESETS["YAML: Critical Drift (Debug Enabled)"].actual);
   const [activeTab, setActiveTab] = useState<"findings" | "diff" | "reports">("findings");
   const [severityFilter, setSeverityFilter] = useState<string>("ALL");
 
   const handlePresetChange = (name: string) => {
     setPresetKey(name);
     if (PRESETS[name]) {
-      setActualYaml(PRESETS[name]);
+      setExpectedInput(PRESETS[name].expected);
+      setActualInput(PRESETS[name].actual);
     }
   };
 
   // Live detection & risk evaluation
-  const { report, error, isBlocked } = useMemo(() => {
+  const { report, error, isBlocked, detectedFormats } = useMemo(() => {
     try {
-      const expObj = parseConfig(expectedYaml, "Expected Config");
-      const actObj = parseConfig(actualYaml, "Actual Config");
+      const expFmt = detectFormat(expectedInput);
+      const actFmt = detectFormat(actualInput);
+      const expObj = parseConfig(expectedInput, "Expected Config", expFmt);
+      const actObj = parseConfig(actualInput, "Actual Config", actFmt);
       const diffs = detectDrift(expObj, actObj);
       const findings = evaluateFindings(diffs);
       const blocked = shouldBlock(findings);
-      const rep = generateReport("expected.yaml", "actual.yaml", findings);
+      const rep = generateReport(`expected.${expFmt}`, `actual.${actFmt}`, findings);
 
-      return { report: rep, error: null, isBlocked: blocked };
+      return {
+        report: rep,
+        error: null,
+        isBlocked: blocked,
+        detectedFormats: { expected: expFmt, actual: actFmt },
+      };
     } catch (err: any) {
-      return { report: null, error: err.message, isBlocked: true };
+      return {
+        report: null,
+        error: err.message,
+        isBlocked: true,
+        detectedFormats: { expected: "yaml", actual: "yaml" },
+      };
     }
-  }, [expectedYaml, actualYaml]);
+  }, [expectedInput, actualInput]);
 
   // Filtered findings
   const filteredFindings = useMemo(() => {
@@ -103,12 +193,12 @@ export default function App() {
           <h1>
             <span>🛡️</span> DriftGuard
           </h1>
-          <p>Real-Time Configuration Change Detector & Risk Classifier</p>
+          <p>Multi-Format Configuration Change Detector & CIS Benchmark Policy Gatekeeper</p>
         </div>
 
         <div className="preset-controls">
           <label htmlFor="presetSelect">
-            <strong>Scenario:</strong>
+            <strong>Scenario Preset:</strong>
           </label>
           <select
             id="presetSelect"
@@ -123,10 +213,12 @@ export default function App() {
           </select>
           <button
             className="filter-pill"
-            title="Reset configs to baseline"
+            title="Reset configs to preset baseline"
             onClick={() => {
-              setExpectedYaml(DEFAULT_EXPECTED);
-              setActualYaml(PRESETS[presetKey]);
+              if (PRESETS[presetKey]) {
+                setExpectedInput(PRESETS[presetKey].expected);
+                setActualInput(PRESETS[presetKey].actual);
+              }
             }}
           >
             <RefreshCw size={14} style={{ display: "inline", verticalAlign: "middle" }} /> Reset
@@ -139,7 +231,7 @@ export default function App() {
         <div className="status-banner blocked">
           <AlertTriangle className="status-icon" />
           <div>
-            <strong>YAML Parsing Error:</strong> {error}
+            <strong>Configuration Syntax Error:</strong> {error}
           </div>
         </div>
       )}
@@ -151,8 +243,8 @@ export default function App() {
             <div className="status-banner blocked">
               <ShieldAlert className="status-icon" />
               <div>
-                <strong>DEPLOYMENT BLOCKED</strong> — Critical configuration drift detected!
-                Debug mode or security policies do not meet production baseline.
+                <strong>DEPLOYMENT BLOCKED</strong> — Critical security policy violation or baseline drift detected!
+                Release gate will halt downstream deployments.
               </div>
             </div>
           ) : report.findings.length > 0 ? (
@@ -160,15 +252,14 @@ export default function App() {
               <AlertTriangle className="status-icon" />
               <div>
                 <strong>DEPLOYMENT WARNING</strong> — Non-critical configuration drift detected.
-                Review changes before promoting to production.
+                Review modifications before promoting to production.
               </div>
             </div>
           ) : (
             <div className="status-banner passed">
               <ShieldCheck className="status-icon" />
               <div>
-                <strong>DEPLOYMENT READY</strong> — Configuration matches expected baseline with
-                zero drift.
+                <strong>DEPLOYMENT READY</strong> — Target configuration matches expected baseline with zero security policy violations.
               </div>
             </div>
           )}
@@ -180,7 +271,7 @@ export default function App() {
               <span className="value">{report.summary.total}</span>
             </div>
             <div className="metric-card critical">
-              <span className="label">Critical</span>
+              <span className="label">Critical Violations</span>
               <span className="value">
                 {report.summary.critical}
                 {report.summary.critical > 0 && (
@@ -189,11 +280,11 @@ export default function App() {
               </span>
             </div>
             <div className="metric-card medium">
-              <span className="label">Medium</span>
+              <span className="label">Medium Drift</span>
               <span className="value">{report.summary.medium}</span>
             </div>
             <div className="metric-card low">
-              <span className="label">Low</span>
+              <span className="label">Low Notice</span>
               <span className="value">{report.summary.low}</span>
             </div>
           </div>
@@ -214,7 +305,7 @@ export default function App() {
           onClick={() => setActiveTab("diff")}
         >
           <Columns size={16} style={{ display: "inline", marginRight: "6px" }} />
-          Side-by-Side YAML
+          Side-by-Side Editor ({detectedFormats ? detectedFormats.expected.toUpperCase() : "YAML"})
         </button>
         <button
           className={`tab-btn ${activeTab === "reports" ? "active" : ""}`}
@@ -248,7 +339,7 @@ export default function App() {
           {filteredFindings.length === 0 ? (
             <div style={{ padding: "2.5rem", textAlign: "center", color: "var(--text-muted)" }}>
               {report.findings.length === 0
-                ? "No configuration differences detected! Everything matches."
+                ? "No configuration differences detected! All policies and values match."
                 : "No findings match the selected severity filter."}
             </div>
           ) : (
@@ -257,6 +348,7 @@ export default function App() {
                 <tr>
                   <th>Setting</th>
                   <th>Severity</th>
+                  <th>Policy Rule</th>
                   <th>Change</th>
                   <th>Expected</th>
                   <th>Actual</th>
@@ -272,6 +364,22 @@ export default function App() {
                       <span className={`tag-severity ${finding.severity}`}>
                         {finding.severity}
                       </span>
+                    </td>
+                    <td>
+                      {finding.ruleId ? (
+                        <div>
+                          <span style={{ fontWeight: 600, color: "var(--text-main)" }}>
+                            {finding.ruleId}
+                          </span>
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                            {finding.reason}
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                          General Drift
+                        </span>
+                      )}
                     </td>
                     <td>
                       <span style={{ textTransform: "capitalize" }}>{finding.change}</span>
@@ -294,34 +402,34 @@ export default function App() {
         </div>
       )}
 
-      {/* Tab 2: Side-by-Side YAML Editor */}
+      {/* Tab 2: Side-by-Side Editor */}
       {activeTab === "diff" && (
         <div className="diff-grid">
           <div className="editor-box">
             <div className="editor-header">
-              <span>Expected Configuration (Baseline)</span>
-              <span>YAML</span>
+              <span>Expected Baseline</span>
+              <span style={{ textTransform: "uppercase" }}>{detectedFormats ? detectedFormats.expected : "YAML"}</span>
             </div>
             <textarea
-              value={expectedYaml}
-              onChange={(e) => setExpectedYaml(e.target.value)}
-              placeholder="Paste or edit expected YAML..."
+              value={expectedInput}
+              onChange={(e) => setExpectedInput(e.target.value)}
+              placeholder="Paste or edit expected YAML, JSON, or TOML..."
               spellCheck={false}
             />
           </div>
 
           <div className="editor-box">
             <div className="editor-header">
-              <span>Actual Configuration (Target)</span>
-              <span>YAML</span>
+              <span>Actual Target</span>
+              <span style={{ textTransform: "uppercase" }}>{detectedFormats ? detectedFormats.actual : "YAML"}</span>
             </div>
             <textarea
-              value={actualYaml}
+              value={actualInput}
               onChange={(e) => {
                 setPresetKey("Custom");
-                setActualYaml(e.target.value);
+                setActualInput(e.target.value);
               }}
-              placeholder="Paste or edit actual YAML..."
+              placeholder="Paste or edit actual YAML, JSON, or TOML..."
               spellCheck={false}
             />
           </div>
@@ -332,8 +440,8 @@ export default function App() {
       {activeTab === "reports" && report && (
         <div className="export-grid">
           <div className="export-card">
-            <h3>Structured JSON Report</h3>
-            <p>Export complete findings payload for CI/CD pipelines, APIs, and audit stores.</p>
+            <h3>Structured JSON Audit Report</h3>
+            <p>Complete findings payload including rule IDs, reasons, and summary statistics.</p>
             <button
               className="btn-primary"
               onClick={() =>
@@ -349,8 +457,8 @@ export default function App() {
           </div>
 
           <div className="export-card">
-            <h3>Markdown Executive Summary</h3>
-            <p>Formatted report ideal for GitHub PR summaries, ticketing systems, or docs.</p>
+            <h3>Markdown Executive Brief</h3>
+            <p>Formatted report ideal for Pull Request annotations, compliance audits, or documentation.</p>
             <button
               className="btn-primary"
               onClick={() =>
@@ -369,4 +477,3 @@ export default function App() {
     </div>
   );
 }
-
